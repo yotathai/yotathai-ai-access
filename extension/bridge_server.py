@@ -318,36 +318,47 @@ def save_memories(memories):
     MEMORY_FILE.write_text(json.dumps(memories, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def find_antigravity_server():
-    """ค้นหาพอร์ตและ CSRF Token ของ Antigravity language_server ที่รันอยู่ในเครื่อง (รองรับทั้ง macOS และ Windows)"""
+_AGY_SERVER_CACHE = {"csrf": None, "ports": []}
+
+
+def find_antigravity_server(force_refresh=False):
+    """ค้นหาพอร์ตและ CSRF Token ของ Antigravity language_server ที่รันอยู่ในเครื่อง (รองรับทั้ง macOS และ Windows แบบไม่กระพริบหน้าจอ)"""
+    if not force_refresh and _AGY_SERVER_CACHE["csrf"] and _AGY_SERVER_CACHE["ports"]:
+        return _AGY_SERVER_CACHE["csrf"], _AGY_SERVER_CACHE["ports"]
     try:
         if os.name == "nt":
-            # สำหรับเครื่อง Windows: ดึง CommandLine และ ProcessId ของ language_server จาก PowerShell/WMIC
+            no_win = 0x08000000
             ps_cmd = [
                 "powershell",
                 "-NoProfile",
+                "-WindowStyle", "Hidden",
                 "-Command",
-                "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*language_server*' -and $_.CommandLine -like '*--csrf_token*' } | Select-Object -First 1 -Property ProcessId,CommandLine | ConvertTo-Json -Compress"
+                "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*language_server*' -and $_.CommandLine -like '*--csrf_token*' } | Select-Object -Property ProcessId,CommandLine | ConvertTo-Json -Compress"
             ]
-            proc_out = subprocess.check_output(ps_cmd, text=True, stderr=subprocess.DEVNULL).strip()
+            proc_out = subprocess.check_output(ps_cmd, text=True, stderr=subprocess.DEVNULL, creationflags=no_win).strip()
             if not proc_out:
                 return None, []
-            proc_info = json.loads(proc_out)
-            pid = str(proc_info.get("ProcessId", "")).strip()
-            cmd_line = str(proc_info.get("CommandLine", ""))
-            m = re.search(r"--csrf_token\s+([a-f0-9-]+)", cmd_line, re.I)
-            if not pid or not m:
-                return None, []
-            csrf = m.group(1)
-
-            net_out = subprocess.check_output(["netstat", "-ano", "-p", "TCP"], text=True, stderr=subprocess.DEVNULL)
-            ports = []
-            for nline in net_out.splitlines():
-                if "LISTENING" in nline and nline.strip().endswith(f" {pid}"):
-                    pm = re.search(r"127\.0\.0\.1:(\d+)", nline)
-                    if pm:
-                        ports.append(pm.group(1))
-            return csrf, ports
+            parsed = json.loads(proc_out)
+            proc_list = parsed if isinstance(parsed, list) else [parsed]
+            net_out = subprocess.check_output(["netstat", "-ano", "-p", "TCP"], text=True, stderr=subprocess.DEVNULL, creationflags=no_win)
+            for proc_info in proc_list:
+                pid = str(proc_info.get("ProcessId", "")).strip()
+                cmd_line = str(proc_info.get("CommandLine", ""))
+                m = re.search(r"--csrf_token[\s=]+([a-f0-9-]+)", cmd_line, re.I)
+                if not pid or not m:
+                    continue
+                csrf = m.group(1)
+                ports = []
+                for nline in net_out.splitlines():
+                    if "LISTENING" in nline and re.search(rf"\s+{re.escape(pid)}\s*$", nline):
+                        pm = re.search(r"(?:127\.0\.0\.1|0\.0\.0\.0|\[::1?\]):(\d+)", nline)
+                        if pm and pm.group(1) not in ports:
+                            ports.append(pm.group(1))
+                if ports:
+                    _AGY_SERVER_CACHE["csrf"] = csrf
+                    _AGY_SERVER_CACHE["ports"] = ports
+                    return csrf, ports
+            return None, []
 
         # สำหรับเครื่อง macOS
         ps_out = subprocess.check_output(["ps", "aux"], text=True)
@@ -368,6 +379,9 @@ def find_antigravity_server():
             text=True
         )
         ports = re.findall(r"127\.0\.0\.1:(\d+)\s+\(LISTEN\)", lsof_out)
+        if ports:
+            _AGY_SERVER_CACHE["csrf"] = csrf
+            _AGY_SERVER_CACHE["ports"] = ports
         return csrf, ports
     except Exception:
         return None, []
@@ -376,30 +390,39 @@ def find_antigravity_server():
 def call_language_server(method, payload=None, timeout=45):
     if payload is None:
         payload = {}
-    csrf, ports = find_antigravity_server()
-    if not csrf or not ports:
-        raise RuntimeError("ไม่พบกระบวนการ Antigravity ที่เปิดอยู่ กรุณาเปิดแอป Antigravity ทิ้งไว้ในเครื่อง")
+    for attempt in range(2):
+        csrf, ports = find_antigravity_server(force_refresh=(attempt > 0))
+        if not csrf or not ports:
+            if attempt == 0:
+                continue
+            raise RuntimeError("ไม่พบกระบวนการ Antigravity ที่เปิดอยู่ กรุณาเปิดโปรแกรม Antigravity ทิ้งไว้ในเครื่อง")
 
-    body = json.dumps(payload).encode("utf-8")
-    last_err = None
-    for port in ports:
-        url = f"http://127.0.0.1:{port}/exa.language_server_pb.LanguageServerService/{method}"
-        req = urllib.request.Request(
-            url,
-            data=body,
-            headers={
-                "Content-Type": "application/json",
-                "x-codeium-csrf-token": csrf
-            }
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                return json.loads(resp.read().decode("utf-8"))
-        except urllib.error.HTTPError as e:
-            if e.code != 400:
-                last_err = f"HTTP {e.code}: {e.read().decode('utf-8', errors='ignore')[:200]}"
-        except Exception as e:
-            last_err = str(e)
+        body = json.dumps(payload).encode("utf-8")
+        last_err = None
+        for port in list(ports):
+            url = f"http://127.0.0.1:{port}/exa.language_server_pb.LanguageServerService/{method}"
+            req = urllib.request.Request(
+                url,
+                data=body,
+                headers={
+                    "Content-Type": "application/json",
+                    "x-codeium-csrf-token": csrf
+                }
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    res_data = json.loads(resp.read().decode("utf-8"))
+                    # ย้ายพอร์ตที่ใช้งานได้ขึ้นเป็นอันดับแรกในแคช
+                    if _AGY_SERVER_CACHE["ports"] and _AGY_SERVER_CACHE["ports"][0] != port:
+                        _AGY_SERVER_CACHE["ports"] = [port] + [p for p in _AGY_SERVER_CACHE["ports"] if p != port]
+                    return res_data
+            except urllib.error.HTTPError as e:
+                if e.code != 400:
+                    last_err = f"HTTP {e.code}: {e.read().decode('utf-8', errors='ignore')[:200]}"
+            except Exception as e:
+                last_err = str(e)
+        _AGY_SERVER_CACHE["csrf"] = None
+        _AGY_SERVER_CACHE["ports"] = []
     raise RuntimeError(last_err or "ไม่สามารถเชื่อมต่อพอร์ต Antigravity ได้")
 
 
