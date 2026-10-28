@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Yotathai AI — ผู้ช่วย AI อัจฉริยะประจำเบราว์เซอร์</title>
+  <link rel="stylesheet" href="sidepanel.css" />
+</head>
+<body>
+  <header class="top-bar">
+    <div class="brand">
+      <span class="brand-logo">⚡</span>
+      <div class="brand-text">
+        <div class="brand-title">Yotathai AI <span class="ver-badge">v2.6</span></div>
+        <div class="brand-sub" id="statusBadge">กำลังเชื่อมต่อ Yotathai AI v2.6...</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button id="btnNewWindowTop" class="icon-btn" title="เปิดหน้าต่างเบราว์เซอร์ใหม่ + แยก AI คุยเรื่องใหม่ทันที (หน้าต่างเดิมยังอยู่ครบ)">🪟</button>
+      <button id="btnAutoReply" class="icon-btn" title="ระบบตอบแชทอัตโนมัติ v2.5 (2 โหมด: คนใหม่บอกว่าเป็น AI / คนสนิทคุยเหมือนผมคุยเอง)">🤖</button>
+      <button id="btnMemory" class="icon-btn" title="ความจำถาวร (Memory & กฎโยธาไทย)">🧠</button>
+      <button id="btnAudit" class="icon-btn" title="ตรวจหน้าเว็บตามกฎโยธาไทย (ลิงก์/รูป/R2)">🛡️</button>
+      <button id="btnReloadExt" class="icon-btn" title="อัปเดตและรีโหลดส่วนขยายทันที">🔄</button>
+    </div>
+  </header>
+
+  <!-- Conversation / Session Bar (เลือกบทสนทนาเดิม / สร้างเรื่องใหม่ / แยกหน้าต่างเบราว์เซอร์ใหม่) -->
+  <div class="session-bar">
+    <select id="sessionSelect" class="session-select" title="เลือกสลับบทสนทนาเดิม หรือดูห้องสนทนาทั้งหมด">
+      <option value="">💬 กำลังโหลดบทสนทนา...</option>
+    </select>
+    <button id="btnNewChat" class="new-chat-btn" title="เปิดเรื่องใหม่ในแท็บนี้ (เมื่อคลิกกลับแท็บเดิม เรื่องเดิมจะกลับมาอัตโนมัติ)">➕ เรื่องใหม่</button>
+    <button id="btnNewWindowAi" class="new-win-btn" title="ขึ้นหน้าต่างเบราว์เซอร์ใหม่ + แยก AI คุยเรื่องใหม่ (หน้าต่างเดิมยังทำงานและเก็บเรื่องเดิมไว้ 100%)">🪟 แยกหน้าต่าง</button>
+    <button id="btnClear" class="icon-btn btn-del-session" title="ลบเฉพาะบทสนทนานี้">🗑️</button>
+  </div>
+
+  <!-- Auto-Reply Status Banner (แสดงเมื่อเปิดโหมดตอบแชทอัตโนมัติ พร้อมปุ่มสลับโหมดด่วน) -->
+  <div class="autoreply-banner hidden" id="autoReplyBanner">
+    <div class="ar-banner-top">
+      <span class="ar-pulse"></span>
+      <span class="ar-banner-text" id="autoReplyBannerText">🤖 เฝ้าแชทอัตโนมัติ v2.5 (0 โทเค็นตอนรอ)...</span>
+      <button id="btnStopAutoReplyQuick" class="stop-btn">ปิดออโต้</button>
+    </div>
+    <div class="ar-banner-sub" id="autoReplyPersonaRow">
+      <span id="currentPartnerBadge" class="persona-pill persona-ai">🤖 โหมดคนใหม่: บอกตรงๆ ว่าเป็น AI</span>
+      <button id="btnSwitchPersonaQuick" class="persona-switch-btn" title="คลิกเพื่อสลับโหมดการคุยของคู่สนทนาคนนี้ทันที">สลับเป็นคุยเหมือนผม ⇄</button>
+    </div>
+  </div>
+
+  <div class="active-tab-bar" id="activeTabBar">
+    <span class="tab-dot"></span>
+    <span class="tab-label" id="activeTabTitle">กำลังอ่านแท็บปัจจุบัน...</span>
+  </div>
+
+  <!-- Auto-Reply Bot Modal v2.5 (2 โหมดอัจฉริยะ: คนใหม่บอกว่าเป็น AI / คนสนิทคุยเหมือนคุณช่างถึก) -->
+  <div class="modal-backdrop hidden" id="autoReplyModal">
+    <div class="modal-card modal-card-scroll">
+      <div class="modal-header">
+        <h3>🤖 บอทตอบแชทอัตโนมัติ v2.5 (แก้พิมพ์เบิ้ล 100%)</h3>
+        <button id="btnCloseAutoReply" class="close-btn">✕</button>
+      </div>
+      <p class="modal-hint">⚡ <strong>เฝ้าหน้าจอ 0 โทเค็น:</strong> แยกโหมดคุยอัตโนมัติ <strong>1) คนใหม่ = บอกตรงๆ ว่าเป็น AI</strong> และ <strong>2) คนสนิทที่ไว้ใจ = คุยเหมือนคุณช่างถึกคุยเอง</strong> (สั่งเพิ่มคนสนิทผ่านช่องแชทได้ตลอดเวลา)</p>
+
+      <div class="ar-form-group">
+        <label class="ar-label">1. ขอบเขตการเฝ้าตอบแชท:</label>
+        <select id="autoReplyTargetMode" class="session-select">
+          <option value="all" selected>🌐 ตอบทุกคนที่ทักมา (คนใหม่=บอกว่าเป็น AI / คนสนิท=คุยเหมือนผม)</option>
+          <option value="current">💬 เฉพาะห้องแชทที่เปิดค้างไว้ตอนนี้ (แยกโหมด AI / คุยเหมือนผม)</option>
+          <option value="whitelist">🎯 ตอบเฉพาะรายชื่อคนสนิทเท่านั้น (ไม่ตอบคนใหม่)</option>
+        </select>
+      </div>
+
+      <div class="ar-form-group" id="arWhitelistGroup">
+        <label class="ar-label">👤 รายชื่อคนสนิท/คนที่ไว้ใจ (ให้คุยเหมือนคุณช่างถึกคุยเอง):</label>
+        <input type="text" id="autoReplyWhitelist" class="ar-input" placeholder="คั่นด้วยลูกน้ำ เช่น พี่นาย น่าน, ผึ้ง" value="พี่นาย น่าน" />
+        <span class="ar-subhint">*คนที่มีชื่อในช่องนี้ AI จะคุยเหมือนคุณช่างถึกพิมพ์เอง (หรือสั่งในแชทว่า "คนนี้ให้คุยเหมือนผมคุย" ก็ได้ครับ)</span>
+      </div>
+
+      <div class="ar-form-group">
+        <label class="ar-label">🤖 โหมดที่ 1 — เมื่อคุยกับ "คนใหม่ / คนทั่วไป" (บอกตรงๆ ว่าเป็น AI):</label>
+        <textarea id="autoReplyAiStyle" rows="2" class="ar-textarea" placeholder="แนวทางคุยกับคนใหม่...">บอกเขาตรงๆ อย่างสุภาพว่าเป็น AI ผู้ช่วยของคุณช่างถึก เริ่มต้นทักทาย ชวนคุย สอบถามธุระ และรับเรื่องไว้ให้คุณช่างถึก</textarea>
+      </div>
+
+      <div class="ar-form-group">
+        <label class="ar-label">👤 โหมดที่ 2 — เมื่อคุยกับ "คนสนิทที่ไว้ใจ" (คุยเหมือนคุณช่างถึกคุยเอง):</label>
+        <textarea id="autoReplyStyle" rows="2" class="ar-textarea" placeholder="แนวทางคุยกับคนสนิท...">คุยเหมือนคุณช่างถึกเป็นคนพิมพ์คุยเอง เป็นกันเอง ธรรมชาติ สั้นกระชับ ชวนคุยต่ออย่างเพื่อนสนิท ห้ามบอกว่าเป็น AI</textarea>
+      </div>
+
+      <div class="ar-actions-row">
+        <button id="btnToggleAutoReply" class="primary-btn ar-toggle-btn">▶️ เปิดระบบตอบแชทอัตโนมัติ v2.5</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Memory Modal -->
+  <div class="modal-backdrop hidden" id="memoryModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>🧠 ความจำถาวรของคุณช่างถึก</h3>
+        <button id="btnCloseMemory" class="close-btn">✕</button>
+      </div>
+      <p class="modal-hint">เชื่อมกับกฎเหล็กเครือโยธาไทย (`GEMINI.md`) อัตโนมัติ และบันทึกความจำเพิ่มเติมด้านล่าง:</p>
+      <div class="memory-list" id="memoryList"></div>
+      <div class="memory-add-row">
+        <input type="text" id="inputNewMemory" placeholder="เพิ่มสิ่งที่ให้จำถาวร เช่น ชอบบินช่วงเช้า..." />
+        <button id="btnAddMemory" class="primary-btn">บันทึก</button>
+      </div>
+    </div>
+  </div>
+
+  <main class="chat-container" id="chatContainer">
+    <!-- การ์ดติดตั้งตัวเชื่อมอัตโนมัติสำหรับผู้ใช้งานใหม่ (ซ่อนอัตโนมัติเมื่อเชื่อมต่อสำเร็จ) -->
+    <div class="welcome-card hidden" id="setupGuideCard" style="border: 1.5px solid #f59e0b; background: rgba(245, 158, 11, 0.08); margin-bottom: 10px;">
+      <div class="welcome-icon">🚀</div>
+      <h2 style="color: #fbbf24;">เริ่มต้นใช้งาน Yotathai AI (ทำครั้งเดียว)</h2>
+      <p>เพื่อให้ <strong>Yotathai AI</strong> เชื่อมต่อกับโปรแกรม <strong>Antigravity</strong> ในเครื่องของคุณโดยอัตโนมัติทุกครั้งที่เปิดเครื่อง กรุณาทำ 2 ขั้นตอนง่ายๆ ครับ:</p>
+      <div class="quick-actions">
+        <button id="btnInstallWin" class="primary-btn" style="width: 100%; justify-content: center; margin-bottom: 6px; padding: 10px;">📥 1. ดาวน์โหลดตัวติดตั้งอัตโนมัติ (สำหรับ Windows)</button>
+        <button id="btnInstallMac" class="quick-btn" style="width: 100%; text-align: center;">🍎 ดาวน์โหลดตัวติดตั้งอัตโนมัติ (สำหรับเครื่อง Mac)</button>
+      </div>
+      <p style="font-size: 11.5px; opacity: 0.85; margin-top: 8px;">💡 หลังดาวน์โหลดแล้ว ให้<strong>ดับเบิลคลิกไฟล์ที่โหลดมา 1 ครั้ง</strong> ระบบจะเชื่อมต่อและพร้อมใช้งานทันทีตลอดไปครับ!</p>
+    </div>
+
+    <div class="welcome-card" id="welcomeCard">
+      <div class="welcome-icon">⚡</div>
+      <h2 id="welcomeHeading">สวัสดีครับ — Yotathai AI (v2.6)</h2>
+      <p>ผู้ช่วย AI อัจฉริยะประจำเบราว์เซอร์ ควบคุม Chrome + <strong>📸 อ่านสลิปบนจอ</strong> + <strong>🤖 ตอบแชทอัตโนมัติ 2 โหมด</strong>:<br/>• <strong>คนใหม่ทักมา:</strong> เริ่มต้นคุยและบอกตรงๆ ว่าเป็น AI<br/>• <strong>คนสนิทที่ไว้ใจ:</strong> คุยเนียนเหมือนคุณคุยเอง</p>
+      <div class="quick-actions">
+        <button class="quick-btn" data-prompt="คนในห้องแชทที่เปิดอยู่นี้เป็นคนสนิทของผม ให้คุยกับเขาเหมือนผมคุยเองเลยนะ">👤 สั่งให้ห้องแชทนี้ "คุยเหมือนผมคุยเอง"</button>
+        <button class="quick-btn" data-prompt="คนในห้องแชทที่เปิดอยู่นี้ให้คุยแบบบอกเขาตรงๆ ว่าเป็น AI ผู้ช่วยของผมนะ">🤖 สั่งให้ห้องแชทนี้ "บอกตรงๆ ว่าเป็น AI"</button>
+        <button class="quick-btn" data-prompt="สรุปใจความสำคัญและตัวเลขสำคัญของหน้าเว็บที่เปิดอยู่นี้">📄 สรุปหน้าเว็บนี้</button>
+        <button class="quick-btn" data-prompt="ตรวจหน้าเว็บนี้ตามกฎเครือโยธาไทย: เช็ครูปเสีย ลิงก์ Google Storage/Drive ที่หลุด และเช็คความเรียบร้อย">🛡️ ตรวจความเรียบร้อยของหน้าเว็บ</button>
+      </div>
+    </div>
+  </main>
+
+  <div class="running-bar hidden" id="runningBar">
+    <div class="spinner"></div>
+    <span id="runningStatusText">กำลังสั่งงาน Chrome...</span>
+    <button id="btnStop" class="stop-btn">⏹ หยุด</button>
+  </div>
+
+  <footer class="composer-area">
+    <div class="attachment-preview-bar hidden" id="attachPreviewBar">
+      <div class="attachment-item" id="attachPreviewItem">
+        <span class="attachment-icon" id="attachPreviewIcon">📎</span>
+        <span class="attachment-name" id="attachPreviewName">ไฟล์</span>
+        <button id="btnRemoveAttach" class="attachment-remove" title="ยกเลิกไฟล์นี้">✕</button>
+      </div>
+    </div>
+    <div class="composer-box">
+      <textarea
+        id="promptInput"
+        rows="2"
+        placeholder="สั่งงานเป็นภาษาไทย... แนบภาพ/ไฟล์ หรือกด Ctrl+V วางรูปได้เลย"
+      ></textarea>
+      <div class="composer-toolbar">
+        <select id="modelSelect" class="model-select" title="เลือกโมเดล (รองรับ AI ทุกค่าย)">
+          <option value="MODEL_PLACEHOLDER_M318" selected>⚡ Gemini 3.8 Flash (ประหยัดพลังงาน - เริ่มต้น)</option>
+          <option value="MODEL_PLACEHOLDER_M418">Gemini 4 Argon (Medium)</option>
+          <option value="MODEL_PLACEHOLDER_M417">Gemini 4 Argon (High - ฉลาดลึก)</option>
+          <option value="MODEL_PLACEHOLDER_M404">Claude Sonnet 5.5 (Ultra)</option>
+          <option value="MODEL_PLACEHOLDER_M402">Claude Opus 5.5 (Ultra)</option>
+          <option value="CLAUDE_CLI_DIRECT">🟣 Claude Code CLI (ตรงผ่านเครื่อง)</option>
+          <option value="GEMINI_CLI_DIRECT">🟢 Gemini CLI (ตรงผ่านเครื่อง)</option>
+        </select>
+        <div class="composer-right">
+          <input type="file" id="fileInput" accept="image/*,.pdf,.txt,.csv,.json,.doc,.docx" class="hidden" />
+          <button id="btnCaptureScreen" class="attach-btn" title="แคปภาพหน้าจอแท็บนี้เพื่ออ่านสลิปโอนเงิน/ข้อความในรูปทันที (OCR)">📸</button>
+          <button id="btnAttach" class="attach-btn" title="แนบรูปภาพหรือไฟล์ (PNG, JPG, PDF, เอกสาร)">📎</button>
+          <button id="btnMic" class="mic-btn" title="พูดสั่งงานด้วยเสียงภาษาไทย">🎤</button>
+          <button id="btnSend" class="send-btn" title="ส่งคำสั่ง">➤</button>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>
