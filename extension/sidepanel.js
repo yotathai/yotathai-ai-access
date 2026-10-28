@@ -75,22 +75,33 @@ async function downloadOneClickInstaller(osType) {
     if (osType === 'windows') {
       const batContent = [
         '@echo off',
-        'chcp 65001 >nul',
-        'title Yotathai AI — ตัวติดตั้งอัตโนมัติสำหรับ Windows',
+        'title Yotathai AI - Automatic Windows Setup',
+        'color 0E',
         'echo ========================================================',
-        'echo   ⚡ กำลังติดตั้ง Yotathai AI Bridge อัตโนมัติ (ทำครั้งเดียว)...',
+        'echo   Yotathai AI - Automatic Windows Setup (One-Time)',
+        'echo   Installing Portable Python and AI Bridge...',
         'echo ========================================================',
-        'set "TARGET_DIR=%USERPROFILE%\\Yotathai_AI_Bridge\\server"',
+        'set "INSTALL_DIR=C:\\Yotathai_AI"',
+        'set "TARGET_DIR=%INSTALL_DIR%\\server"',
+        'set "PY_DIR=%INSTALL_DIR%\\python"',
+        'set "PY_EXE=%PY_DIR%\\python.exe"',
+        'set "PYW_EXE=%PY_DIR%\\pythonw.exe"',
+        'set "PY_ZIP=%TEMP%\\python_embed_win64.zip"',
         'if not exist "%TARGET_DIR%" mkdir "%TARGET_DIR%"',
-        'powershell -NoProfile -Command "[IO.File]::WriteAllBytes(\'%TARGET_DIR%\\bridge_server.py\', [Convert]::FromBase64String(\'' + b64Py + '\'))"',
+        'powershell -NoProfile -ExecutionPolicy Bypass -Command "[IO.File]::WriteAllBytes(\'%TARGET_DIR%\\bridge_server.py\', [Convert]::FromBase64String(\'' + b64Py + '\'))"',
+        'if not exist "%PY_EXE%" (',
+        '  echo Installing Portable Python for Windows...',
+        '  mkdir "%PY_DIR%" 2>nul',
+        '  powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri \'https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip\' -OutFile \'%PY_ZIP%\' -UseBasicParsing; Expand-Archive -Path \'%PY_ZIP%\' -DestinationPath \'%PY_DIR%\' -Force"',
+        ')',
+        'powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like \'*bridge_server.py*\' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"',
         'set "STARTUP_VBS=%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\Yotathai_AI_AutoStart.vbs"',
         'echo Set WshShell = CreateObject("WScript.Shell") > "%STARTUP_VBS%"',
-        'echo WshShell.Run "pythonw ""%TARGET_DIR%\\bridge_server.py""", 0, False >> "%STARTUP_VBS%"',
+        'echo WshShell.Run """%PYW_EXE%"" ""%TARGET_DIR%\\bridge_server.py""", 0, False >> "%STARTUP_VBS%"',
         'wscript.exe "%STARTUP_VBS%"',
         'echo.',
-        'echo ✅ ติดตั้งและเปิดใช้งาน Yotathai AI สำเร็จเรียบร้อยแล้ว!',
-        'echo    (ระบบจะเปิดทำงานเองอัตโนมัติทุกครั้งที่เปิดคอมพิวเตอร์)',
-        'timeout /t 4'
+        'echo SUCCESS! Yotathai AI Bridge is now running.',
+        'timeout /t 3'
       ].join('\r\n');
       const blob = new Blob([batContent], { type: 'application/octet-stream' });
       const a = document.createElement('a');
